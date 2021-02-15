@@ -6,6 +6,8 @@ import reactor.core.publisher.Mono;
 @Component
 public class StringParser {
 
+  public static final int MAX_PARTS_NUMBER = 3;
+
   /**
    * Parse of string message that contains 3 parts divided by delimiter.
    *
@@ -15,7 +17,7 @@ public class StringParser {
   public Mono<ButtonCallback> parse(String message) {
     String[] callback = message.split(":");
 
-    if (callback.length != 3) {
+    if (callback.length != MAX_PARTS_NUMBER) {
       return Mono.empty();
     }
 
@@ -30,8 +32,9 @@ public class StringParser {
   }
 
   String combine(ButtonCallback buttonCallback) {
-    return buttonCallback.getCommand() + ":"
-        + buttonCallback.getRideId() + ":"
-        + buttonCallback.getRideUserId();
+    return String.format("%s : %s : %s",
+        buttonCallback.getCommand(),
+        buttonCallback.getRideId(),
+        buttonCallback.getRideUserId());
   }
 }

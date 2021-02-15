@@ -9,9 +9,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties
 public class EcsApplication {
 
-  /**
-   * Main.
-   */
   public static void main(String[] args) {
     SpringApplication application = new SpringApplication(EcsApplication.class);
     application.setWebApplicationType(WebApplicationType.REACTIVE);

@@ -15,6 +15,8 @@ import org.springframework.core.io.ClassPathResource;
 @Configuration
 public class MapConfig {
 
+  public static final String PATHNAME = "map.osm.pbf";
+
   @Value("${graphhopper.source}")
   private String graphSource;
   @Value("${graphhopper.workingDirectory}")
@@ -28,7 +30,7 @@ public class MapConfig {
   public GraphHopper graphHopper() {
     GraphHopper hopper = new GraphHopperOSM().forServer();
     try (InputStream resource = new ClassPathResource(graphSource).getInputStream()) {
-      File file = new File("map.osm.pbf");
+      File file = new File(PATHNAME);
       if (!file.exists()) {
         Files.copy(resource, file.toPath());
       }

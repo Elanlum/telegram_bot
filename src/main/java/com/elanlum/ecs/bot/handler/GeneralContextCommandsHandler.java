@@ -6,6 +6,9 @@ import com.elanlum.ecs.bot.context.model.ContextType;
 import com.elanlum.ecs.bot.context.model.FieldName;
 import com.elanlum.ecs.bot.context.model.UserContext;
 
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -26,8 +29,8 @@ public class GeneralContextCommandsHandler {
    * Method checks KVStorage for existent user's context, creates it if needed. If there is a
    * context, corresponding handler is invoked to edit it.
    *
-   * @param update is passed from {@link BotCommandsHandler} and contains
-   *     user's message, telegramId, etc.
+   * @param update is passed from {@link BotCommandsHandler} and contains user's message,
+   *               telegramId, etc.
    * @return Set of available commands which depends on current userContext state
    */
   public Mono<Set<String>> processCommand(Update update) {
@@ -50,17 +53,21 @@ public class GeneralContextCommandsHandler {
           }
           return Mono.just(Tuples.of(userContext, false));
         })
-        .map(userContextAndWasDeleted -> {
-          UserContext userContext = userContextAndWasDeleted.getT1();
+        .map(userContextDeleted -> {
+          UserContext userContext = userContextDeleted.getT1();
           Set<String> commands = userContext.getAvailableCommands();
-          if (userContext.getState() != 0) {
+          int state = userContext.getState();
+
+          if (state != 0) {
             commands.clear();
-            commands.add(FieldName.getInfo(userContext.getState()));
+            commands.add(FieldName.getInfo(state));
           }
-          if (userContextAndWasDeleted.getT2()) {
+
+          if (userContextDeleted.getT2()) {
             commands.clear();
             commands.add("Ride request creation is finished");
           }
+
           return userContext.getAvailableCommands();
         });
   }
@@ -70,14 +77,11 @@ public class GeneralContextCommandsHandler {
         .map(userContext -> userContext)
         .switchIfEmpty(
             Mono.create(sink -> {
-                  UserContext newUserContext = null;
-                  for (ContextType contextType : ContextType.values()) {
-                    if (command.equals(contextType.getCommandName())) {
-                      newUserContext = contextFactory.createUserContext(telegramId, contextType);
-                      break;
-                    }
-                  }
-                  sink.success(newUserContext);
+                  Arrays.stream(ContextType.values())
+                      .filter(contextType -> Objects.equals(command, contextType.getCommandName()))
+                      .findFirst()
+                      .ifPresent(contextType ->
+                          sink.success(contextFactory.createUserContext(telegramId, contextType)));
                 }
             ));
   }

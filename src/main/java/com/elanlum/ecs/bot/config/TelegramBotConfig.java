@@ -15,16 +15,13 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 @EnableConfigurationProperties(TelegramBotProperties.class)
 public class TelegramBotConfig {
 
-
   static {
     ApiContextInitializer.init();
-    log.info("Telegram ApiContext initialized");
   }
 
   /**
    * Bot bean.
    */
-
   @Bean
   public TelegramBotsApi getApi(TelegramBotEcs bot) throws TelegramApiRequestException {
 

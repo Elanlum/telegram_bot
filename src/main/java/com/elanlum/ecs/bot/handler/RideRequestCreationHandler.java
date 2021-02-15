@@ -1,11 +1,15 @@
 package com.elanlum.ecs.bot.handler;
 
+import static com.elanlum.ecs.bot.util.ConstantStorage.cancelCommand;
+import static com.elanlum.ecs.bot.util.ConstantStorage.createCommand;
+
 import com.elanlum.ecs.bot.context.exceptions.UnparsableInputException;
 import com.elanlum.ecs.bot.context.exceptions.WrongCommandException;
 import com.elanlum.ecs.bot.context.model.ContextType;
 import com.elanlum.ecs.bot.context.model.FieldName;
 import com.elanlum.ecs.bot.context.model.RideRequestFieldParser;
 import com.elanlum.ecs.bot.context.model.UserContext;
+import com.elanlum.ecs.bot.util.ConstantStorage;
 import com.elanlum.ecs.ride.crud.service.impl.DriverRideRequestService;
 import com.elanlum.ecs.ride.crud.service.impl.PassengerRideRequestService;
 import com.elanlum.ecs.ride.mapper.RideRequestMapper;
@@ -13,10 +17,13 @@ import com.elanlum.ecs.ride.model.common.AbstractRideRequest;
 import com.elanlum.ecs.user.service.UserService;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.telegram.telegrambots.meta.api.objects.Location;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import reactor.core.publisher.Mono;
 
@@ -36,19 +43,20 @@ public class RideRequestCreationHandler {
    * message(command) and this method handles it, updating internal context of creating certain ride
    * request.
    *
-   * @param userContext - context of creating ride request, containing current parameters for a
-   *     ride, available commands, user's role, etc.
-   * @param telegramUpdate - object, containing anything that users sends through telegram. In
-   *     our case it is a command, a map or parameters.
+   * @param userContext    - context of creating ride request, containing current parameters for a
+   *                       ride, available commands, user's role, etc.
+   * @param telegramUpdate - object, containing anything that users sends through telegram. In our
+   *                       case it is a command, a map or parameters.
    * @return updated {@link UserContext}
    */
+
+  //refactor
   public Mono<UserContext> handle(UserContext userContext, Update telegramUpdate) {
-    String command;
-    if (telegramUpdate.getMessage().getLocation() != null) {
-      command = (telegramUpdate.getMessage().getLocation().getLatitude()) + " "
-          + telegramUpdate.getMessage().getLocation().getLongitude();
-    } else {
-      command = telegramUpdate.getMessage().getText().trim();
+    String command = telegramUpdate.getMessage().getText().trim();
+    Location location = telegramUpdate.getMessage().getLocation();
+
+    if (Objects.nonNull(location)) {
+      command = String.format("%s %s", location.getLatitude(), location.getLongitude());
     }
 
     userContext.setAvailableCommands(fillAvailableCommands(userContext.getFieldsToFill(),
@@ -61,64 +69,62 @@ public class RideRequestCreationHandler {
 
     if (userContext.getState() == 0) {
       return processCommand(userContext, command);
-    } else {
-      return processParameters(userContext, command);
     }
+
+    return processParameters(userContext, command);
   }
 
   private Set<String> fillCommand(FieldName fieldName,
       Map<FieldName, String> fieldsToFill, Set<String> availableCommands) {
+
     if (!fieldsToFill.containsKey(fieldName)) {
       availableCommands.add(fieldName.getCommand());
-    } else {
-      availableCommands.remove(fieldName.getCommand());
+      return availableCommands;
     }
+
+    availableCommands.remove(fieldName.getCommand());
     return availableCommands;
   }
 
   private Mono<UserContext> processCommand(UserContext userContext, String command) {
-    if (command.equals("/cancel")) {
+    if (command.equals(cancelCommand)) {
       userContext.setCanceled(true);
       return Mono.just(userContext);
     }
+
     Set<String> availableCommands = userContext.getAvailableCommands();
-    if (command.equals("/create")) {
-      if (availableCommands.contains("/create")) {
+    if (command.equals(createCommand)) {
+      if (availableCommands.contains(createCommand)) {
         return saveRideRequest(userContext)
             .doOnNext(saveRideRequest -> userContext.setCompleted(true))
             .map(saveRideRequest -> userContext);
-      } else {
-        Mono<UserContext> error = Mono
-            .error(new WrongCommandException("Not all the parameters are set"));
-        return error;
       }
+      return Mono.error(new WrongCommandException("Not all the parameters are set"));
     }
     try {
       Arrays.stream(FieldName.values())
           .filter(fieldName -> (fieldName != FieldName.ROLE) && (fieldName
               != FieldName.TELEGRAM_ID))
           .forEach(fieldName -> {
-            if (fieldName.getCommand().equals(command)) {
-              if (availableCommands.contains(command)) {
-                userContext.setState(fieldName.getState());
-              } else if (command.equals(FieldName.RIDE_TIME.getCommand()) && !userContext
-                  .getFieldsToFill().containsKey(FieldName.RIDE_DATE)) {
-                throw new WrongCommandException("You can't set ride time before date");
-              } else {
-                throw new WrongCommandException(
-                    "Parameter <" + fieldName.name() + "> is already set");
-              }
+
+            if (fieldName.getCommand().equals(command) && availableCommands.contains(command)) {
+              userContext.setState(fieldName.getState());
+            }
+
+            if (command.equals(FieldName.RIDE_TIME.getCommand()) && !userContext
+                .getFieldsToFill().containsKey(FieldName.RIDE_DATE)) {
+              throw new WrongCommandException("You can't set ride time before date");
             }
           });
     } catch (WrongCommandException ex) {
       log.debug("Exception caught", ex);
       return Mono.error(ex);
     }
+
     if (userContext.getState() != 0) {
       return Mono.just(userContext);
-    } else {
-      return Mono.error(new WrongCommandException("Unknown command: " + command));
     }
+    return Mono.error(new WrongCommandException("Unknown command: " + command));
   }
 
   private Mono<? extends AbstractRideRequest> saveRideRequest(UserContext userContext) {
@@ -158,12 +164,13 @@ public class RideRequestCreationHandler {
 
   private Mono<UserContext> processParameters(UserContext userContext, String command) {
     return Mono.fromSupplier(() -> {
-      if (command.equals("/cancel")) {
+      if (command.equals(cancelCommand)) {
         userContext.setCanceled(true);
         return userContext;
       }
       Map<FieldName, String> fieldsToFill = userContext.getFieldsToFill();
       Set<String> availableCommands = userContext.getAvailableCommands();
+
       switch (userContext.getState()) {
         case 1:
           parser.validateCoordinate(command);
@@ -199,7 +206,7 @@ public class RideRequestCreationHandler {
         default:
       }
       if (availableCommands.size() == 1) {
-        availableCommands.add("/create");
+        availableCommands.add(createCommand);
       }
       userContext.setAvailableCommands(availableCommands);
       userContext.setState(0);

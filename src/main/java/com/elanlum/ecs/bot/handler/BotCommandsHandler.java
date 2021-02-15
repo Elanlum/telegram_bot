@@ -1,9 +1,13 @@
 package com.elanlum.ecs.bot.handler;
 
+import static com.elanlum.ecs.bot.util.ConstantStorage.helpCommand;
+import static com.elanlum.ecs.bot.util.ConstantStorage.startCommand;
+
 import com.elanlum.ecs.bot.handler.mapper.TelegramUserMapper;
 import com.elanlum.ecs.bot.button.ButtonCallback;
 import com.elanlum.ecs.bot.button.InitialButtons;
 import com.elanlum.ecs.bot.button.StringParser;
+import com.elanlum.ecs.bot.util.ConstantStorage;
 import com.elanlum.ecs.ride.crud.service.impl.RideService;
 import com.elanlum.ecs.ride.exceptions.FeedbackUpdateException;
 import com.elanlum.ecs.ride.model.common.Ride;
@@ -12,6 +16,7 @@ import com.elanlum.ecs.user.model.User;
 import com.elanlum.ecs.user.service.UserService;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
@@ -48,24 +53,17 @@ public class BotCommandsHandler {
     }
 
     var message = update.getMessage();
-    if (message != null) {
-      if (message.hasText()) {
-        if (message.getText().equals("/help")) {
-          var sendMessage = handleHelp(update);
-          listMes.add(sendMessage);
-        } else if (message.getText().equals("/start")) {
-          var sendMessage = handleStart(update);
-          listMes.add(sendMessage);
-        } else {
-          var sendMessage = handleOtherCommand(update);
-          listMes.add(sendMessage);
-        }
-      }
-      if (message.hasLocation()) {
-        var sendMessage = handleOtherCommand(update);
-        listMes.add(sendMessage);
-      }
+
+    if (Objects.equals(message.getText(), helpCommand)) {
+      var sendMessage = handleHelp(update);
+      listMes.add(sendMessage);
     }
+    if (Objects.equals(message.getText(), startCommand)) {
+      var sendMessage = handleStart(update);
+      listMes.add(sendMessage);
+    }
+    var sendMessage = handleOtherCommand(update);
+    listMes.add(sendMessage);
 
     return Flux.merge(listMes)
         .onErrorResume(error -> Mono.just(new SendMessage()
@@ -149,13 +147,16 @@ public class BotCommandsHandler {
         .flatMap(rideAndUser -> {
           Ride ride = rideAndUser.getT1();
           User user = rideAndUser.getT2();
+
           if (user.getId().equals(ride.getDriver().getId())) {
             return rideService.updateDriverFeedback(ride.getId(), feedback);
-          } else if (user.getId().equals(ride.getPassenger().getId())) {
-            return rideService.updatePassengerFeedback(ride.getId(), feedback);
-          } else {
-            return Mono.error(new FeedbackUpdateException("Feedback can not be updated"));
           }
+
+          if (user.getId().equals(ride.getPassenger().getId())) {
+            return rideService.updatePassengerFeedback(ride.getId(), feedback);
+          }
+
+          return Mono.error(new FeedbackUpdateException("Feedback can not be updated"));
         });
   }
 }
