@@ -1,0 +1,36 @@
+spring:
+  data:
+    mongodb:
+      database: spring_data
+      host: localhost
+      port: 27017
+      username: root
+      password: pass
+      authentication-database: admin
+
+
+---
+graphhopper:
+  source: "SanktPetersburg.osm.pbf"
+  workingDirectory: ${GRAPH_HOPPER_DATA:data}
+
+#TelegramConfig
+---
+telegrambot:
+  username: ${TELEGRAM_NAME:Ridesharing_bot}
+  token: ${TELEGRAM_TOKEN:760423168:AAERflrOwI7NatFUASyK69bT9z4KLbzkwI0}
+  baseurl: ${TELEGRAM_HOST:https://api.telegram.org/bot}
+
+---
+quartz:
+  properties:
+    notification-scheduling: quartzNotification.properties
+    matching-scheduling: quartzMatching.properties
+
+---
+notification-settings:
+  minutes-before-the-ride-start: 5
+
+---
+matching-settings:
+  match-frequency-minutes: 1

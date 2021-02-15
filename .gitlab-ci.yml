@@ -1,0 +1,48 @@
+image: openjdk:11
+
+variables:
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+stages:
+- checkstyle
+- build
+- test
+- integrationTests
+- pitest
+
+before_script:
+- chmod +x gradlew
+- export GRADLE_USER_HOME=`pwd`/.gradle
+
+cache:
+  paths:
+  - .gradle/wrapper
+  - .gradle/caches
+
+build:
+  stage: build
+  script:
+  - ./gradlew assemble
+  allow_failure: false
+
+checkstyle:
+  stage: checkstyle
+  script:
+  - ./gradlew checkstyleMain checkstyleTest
+
+test:
+  stage: test
+  script:
+  - ./gradlew test jacocoTestReport
+  - cat build/reports/jacoco/test/html/index.html
+  - ./gradlew jacocoTestCoverageVerification
+
+integrationTests:
+  stage: integrationTests
+  script:
+  - ./gradlew integrationTests
+
+pitest:
+  stage: pitest
+  script:
+  - ./gradlew pitest
